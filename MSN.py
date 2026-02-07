@@ -3,8 +3,12 @@ import numpy as np
 import requests
 import io
 import time
+import random
+import matplotlib.pyplot as plt
+from sklearn.manifold import SpectralEmbedding
+from sklearn.cluster import KMeans
 
-# Ghorbanet, to chetori?
+# Ghorboonet.
 class MovieGraphBuilder:
     def __init__(self, min_common_users=1):
         # I filtered out edges that have fewer than 1 common users
@@ -254,6 +258,119 @@ class BipartiteMatcher:
                         matches.append((u, v))
         return matches
 
+class GraphEmbedder:
+    def __init__(self, builder):
+        self.builder = builder
+
+    def get_largest_connected_component(self):
+        '''
+        finds the largest group of connected movies.
+        spectral embedding requires a fully connected graph to look good.
+        '''
+        all_nodes = set(self.builder.graph.keys())
+        if not all_nodes:
+            return []
+
+        visited = set()
+        largest_component = []
+
+        for node in all_nodes:
+            if node not in visited:
+                component = []
+                stack = [node]
+                visited.add(node)
+                while stack:
+                    curr = stack.pop()
+                    component.append(curr)
+                    for neighbor in self.builder.graph.get(curr, {}):
+                        if neighbor not in visited:
+                            visited.add(neighbor)
+                            stack.append(neighbor)
+                
+                if len(component) > len(largest_component):
+                    largest_component = component
+        
+        print(f"graph filtered from {len(all_nodes)} total to {len(largest_component)}.")
+        return largest_component
+
+    def run_analysis(self, n_clusters=5):
+        print("\n--- BONUS TASK: Graph Embeddings (Spectral Embedding) ---")
+        
+        valid_nodes = self.get_largest_connected_component()
+        
+        node_to_idx = {node: i for i, node in enumerate(valid_nodes)}
+        n = len(valid_nodes)
+
+        print(f"building adjecency matrix for {n} nodes...")
+        adj_mat = np.zeros((n, n))
+        
+        for u in valid_nodes:
+            u_idx = node_to_idx[u]
+            neighbors = self.builder.graph.get(u, {})
+            for v, weight in neighbors.items():
+                if v in node_to_idx:
+                    v_idx = node_to_idx[v]
+                    adj_mat[u_idx][v_idx] = weight
+
+        # ensure A[i][j] == A[j][i]
+        adj_mat = (adj_mat + adj_mat.T) / 2
+
+        print("finding 2D vector representation...")
+        embedder = SpectralEmbedding(n_components=2, affinity='precomputed', random_state=42)
+        embeddings = embedder.fit_transform(adj_mat)
+
+        print(f"clustering movies into {n_clusters} genres...")
+        kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
+        labels = kmeans.fit_predict(embeddings)
+
+        print("generating plot...")
+        plt.figure(figsize=(14, 10))
+        
+        scatter = plt.scatter(embeddings[:, 0], embeddings[:, 1], c=labels, cmap='viridis', s=20, alpha=0.6)
+        plt.title("Movie Similarity Graph Embeddings", fontsize=16)
+        plt.xlabel("Dimension 1")
+        plt.ylabel("Dimension 2")
+        plt.colorbar(scatter, label='Cluster ID')
+
+        # I tried showing some famous movies on the plot, but it looked messy so i commented it.
+        '''
+        famous_movies = ["Toy Story", "Godfather", "Lion King", "Silence of the Lambs", "Return of the Jedi", "Titanic", "Jurassic Park"]
+        
+        annotated_count = 0
+        
+        for node_id in valid_nodes:
+            title = self.builder.get_title(node_id)
+            idx = node_to_idx[node_id]
+            x, y = embeddings[idx, 0], embeddings[idx, 1]
+
+            is_famous = False
+            for famous in famous_movies:
+                if famous.lower() in title.lower():
+                    is_famous = True
+                    break
+            
+            if is_famous:
+                x_offset = random.choice([-100, -60, 60, 100]) + random.uniform(-10, 10)
+                y_offset = random.choice([-100, -60, 60, 100]) + random.uniform(-10, 10)
+                
+                plt.annotate(
+                    title,
+                    xy=(x, y), 
+                    xytext=(x_offset, y_offset),
+                    textcoords='offset points', 
+                    arrowprops=dict(arrowstyle="->", color='black', alpha=0.5),
+                    fontsize=9, 
+                    fontweight='bold', 
+                    color='black',
+                    bbox=dict(boxstyle="round,pad=0.3", fc="white", alpha=0.7)
+                )
+                annotated_count += 1
+        '''
+        
+        plt.tight_layout()
+        plt.show()
+        print("bonus task done.")
+
 if __name__ == "__main__":
     # Test
     builder = MovieGraphBuilder(min_common_users=10)
@@ -320,3 +437,8 @@ if __name__ == "__main__":
             mid = int(m_str.split('_')[1])
             movie_title = builder.get_title(mid)
             print(f"User {uid} matches : {movie_title}")
+
+
+    # graph embeddings test
+    embedder = GraphEmbedder(builder)
+    embedder.run_analysis(n_clusters=5)
