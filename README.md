@@ -41,7 +41,7 @@ pip install pandas numpy matplotlib scikit-learn requests
 
 ## 🤝 Credits
 
-[Sadra seyyed Tabaei](https://github.com/sadra3st) & [Kia Sheykhi](https://github.com/kia8506)
+[Sadra Seyedtabaei](https://github.com/sadra3st) & [Kia Sheykhi](https://github.com/kia8506)
 
 ---
 
