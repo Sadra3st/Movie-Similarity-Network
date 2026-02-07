@@ -3,11 +3,12 @@ import numpy as np
 import requests
 import io
 import time
-# Salam, chetori?
+
+# Ghorbanet, to chetori?
 class MovieGraphBuilder:
-    def __init__(self, min_common_users=5):
-        # I filtered out edges that have fewer than this many common users
-        # to avoid the graph becoming too dense/messy.
+    def __init__(self, min_common_users=1):
+        # I filtered out edges that have fewer than 1 common users
+        # to avoid the graph becoming messy
         self.min_common_users = min_common_users
         self.graph = {}
         self.movie_titles = {}
@@ -156,6 +157,103 @@ class MovieGraphBuilder:
         print(f"total weighted cost: {distances[end_id]:.4f}")
         return path
 
+class BipartiteMatcher:
+    def __init__(self, builder):
+        self.builder = builder
+        self.residual_graph = {} 
+        self.source = 'SOURCE'
+        self.sink = 'SINK'
+        self.matches = []
+
+    def build_bipartite_network(self, user_ids, min_rating=5):
+        '''
+        Source -> Users -> Movies -> Sink
+        only included edges if the rating is high enough (>= min_rating).
+        '''
+        print(f"building bipartite graph for {len(user_ids)} users (Rating >= {min_rating})")
+        self.residual_graph = {}
+        
+        #make sure node exists
+        def add_node(n):
+            if n not in self.residual_graph:
+                self.residual_graph[n] = {}
+
+        add_node(self.source)
+        add_node(self.sink)
+
+        # Source -> Users (Capacity 1)
+        for uid in user_ids:
+            u_node = f"User_{uid}"
+            add_node(u_node)
+            # forward edge 
+            self.residual_graph[self.source][u_node] = 1
+            # backward edge 
+            self.residual_graph[u_node][self.source] = 0
+            # Users -> Movies (Capacity 1)
+            # getting ratings
+            user_ratings = self.builder.df_ratings[
+                (self.builder.df_ratings['user_id'] == uid) & 
+                (self.builder.df_ratings['rating'] >= min_rating)
+            ]
+            for _, row in user_ratings.iterrows():
+                mid = row['movie_id']
+                m_node = f"Movie_{mid}"
+                add_node(m_node)
+                # forward
+                self.residual_graph[u_node][m_node] = 1
+                # backward 
+                if u_node not in self.residual_graph[m_node]:
+                    self.residual_graph[m_node][u_node] = 0
+                # Movies -> Sink (Capacity 1)
+                # forward 
+                if self.sink not in self.residual_graph[m_node]:
+                    self.residual_graph[m_node][self.sink] = 1
+                    self.residual_graph[self.sink][m_node] = 0
+
+        print(f"flow network built. nodes: {len(self.residual_graph)}")
+
+    def dfs(self, u, visited, path):
+        if u == self.sink:
+            return True
+        
+        visited.add(u)
+        
+        for v, cap in self.residual_graph[u].items():
+            if v not in visited and cap > 0:
+                path.append((u, v))
+                if self.dfs(v, visited, path):
+                    return True
+                path.pop()
+        
+        return False
+
+    def ford_fulkerson(self):
+        ''' computing max flow to get the maximum matching '''
+        max_flow = 0
+        while True:
+            visited = set()
+            path = []
+            # find path from source to sink
+            if not self.dfs(self.source, visited, path):
+                break 
+            path_flow = 1
+            max_flow += path_flow
+            # updating 
+            for u, v in path:
+                self.residual_graph[u][v] -= path_flow
+                self.residual_graph[v][u] += path_flow
+        return max_flow
+
+    def get_matches(self):
+        ''' getting the matches'''
+        matches = []
+        for u in self.residual_graph:
+            if u.startswith("User_"):
+                for v, cap in self.residual_graph[u].items():
+                    if v.startswith("Movie_") and cap == 0:
+                        matches.append((u, v))
+        return matches
+
 if __name__ == "__main__":
     # Test
     builder = MovieGraphBuilder(min_common_users=10)
@@ -201,3 +299,24 @@ if __name__ == "__main__":
                 print(f"[{i+1}] {title}")
     else:
         print("could not find movies.")
+
+
+    #  bipartite matching test
+    print(f"\n--- TASK 2: Recommendation Matching (Bipartite Max-Flow) ---")
+    # select a small bunch of random users for testing
+    sample_users = builder.df_ratings['user_id'].unique()[:8]
+    print(f"users selected for matching: {sample_users}")
+    matcher = BipartiteMatcher(builder)
+    matcher.build_bipartite_network(sample_users, min_rating=5)
+    max_matches = matcher.ford_fulkerson()
+    print(f"\nmax flow calculated: {max_matches}")
+    print("\nmatches found:")
+    results = matcher.get_matches()
+    if not results:
+        print("no matches found (maybe users didn't rate anything 5 stars)")
+    else:
+        for u_str, m_str in results:
+            uid = u_str.split('_')[1]
+            mid = int(m_str.split('_')[1])
+            movie_title = builder.get_title(mid)
+            print(f"User {uid} matches : {movie_title}")
