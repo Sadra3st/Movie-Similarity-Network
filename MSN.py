@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 from sklearn.manifold import SpectralEmbedding
 from sklearn.cluster import KMeans
 
-# Ghorbanet, to chetori?
+# Ghorboonet.
 class MovieGraphBuilder:
     def __init__(self, min_common_users=1):
         # I filtered out edges that have fewer than 1 common users
