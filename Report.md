@@ -1,6 +1,3 @@
-
-***
-
 # Final Project Report - Graph Algorithms in Real Networks
 **Movie Similarity Network**
 
@@ -167,6 +164,10 @@ The generated scatter plot showed distinct groupings.
 *   **Cluster 1 (e.g., Godfather, Pulp Fiction):** Represented critically acclaimed Dramas/Crime.
 *   **Cluster 2:** Family/Animation.
 
+![](screenshot/plot.png) 
+
+![](screenshot/plot2.png)
+
 **Interpretation:**
 The geometric distance in the embedding space correlates with semantic similarity. Without being told the "Genre" of the movie, the graph topology alone (who watches what) was sufficient for the algorithm to "learn" genres. This demonstrates the power of **Collaborative Filtering**.
 
@@ -183,4 +184,5 @@ The project was implemented using modular Python classes:
 *   **Modeling Matters:** The decision to invert weights ($1/w$) was critical for making Dijkstra applicable to similarity scoring
 *   **Algorithms in Context:** Max-Flow is not just for pipes/traffic; it efficiently solves resource allocation problems in social data
 *   **Graph Structure:** The MovieLens dataset exhibits "Small World" properties, where any two movies are connected by a short chain of intermediaries
+---
 
